@@ -8,6 +8,7 @@
 namespace {
 
 using bess::utils::Codel;
+using bess::utils::Queue;
 void integer_drop(int* ptr) {
   delete ptr;
 }
@@ -226,7 +227,7 @@ TEST(CodelTest, MultiPushPop) {
   EXPECT_EQ(c.Size(), n);
 
   int** output = new int*[n]; 
-  c.Pop(output, n);
+  ASSERT_EQ(c.Pop(output, n), n);
   for (int i = 0; i < n; i++) {
     ASSERT_EQ(output[i], vals[i]);
   }
@@ -237,4 +238,31 @@ TEST(CodelTest, MultiPushPop) {
   delete[] output;
 }
 
+// Tests to make sure the factory produces fully functional codel instance.
+TEST(CodelTest, Generator) {
+  std::function<Queue<int*>*()> generator =
+      Codel<int*>::Factory(&integer_drop, 8, 5000000, 100000000);
+  for (int i = 0; i < 2; i++) {
+    Queue<int*>* q = generator();
+    ASSERT_EQ(q->Capacity(), 8);
+
+    int* val1 = new int();
+    int* val2 = new int();
+    ASSERT_FALSE(q->Push(val1));
+    ASSERT_FALSE(q->Push(val2));
+    ASSERT_EQ(q->Size(), 2);
+
+    int* output;
+    ASSERT_FALSE(q->Pop(output));
+    ASSERT_EQ(output, val1);
+    ASSERT_FALSE(q->Pop(output));
+    ASSERT_EQ(output, val2);
+
+    ASSERT_TRUE(q->Pop(output));
+    ASSERT_TRUE(q->Empty());
+    delete val1;
+    delete val2;
+    delete q;
+  }
+}
 }  // namespace

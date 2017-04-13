@@ -3,12 +3,12 @@
 
 #include <cmath>
 #include <deque>
+#include <functional>
 
 #include <glog/logging.h>
 
 #include "time.h"
 #include "queue.h"
-
 
 namespace bess {
 namespace utils {
@@ -50,6 +50,7 @@ class Codel final: public Queue<T> {
         queue_(),
         drop_func_(drop_func) { }
 
+  // deconstructor that drops all objects still left in the internal queue.  
   virtual ~Codel() {
     Wrapper w;
     while (!queue_.empty()) {
@@ -135,7 +136,12 @@ class Codel final: public Queue<T> {
     return i;
   }
 
-  size_t Capacity() override { return queue_.max_size(); }
+  size_t Capacity() override { 
+    if (max_size_ != 0) {
+      return max_size_;
+    }
+    return queue_.max_size();
+  }
 
   bool Empty() override { return queue_.empty(); }
 
@@ -147,6 +153,35 @@ class Codel final: public Queue<T> {
   }
 
   size_t Size() override { return queue_.size(); }
+
+  int Resize(size_t new_capacity) override {
+    if (new_capacity <= Size()) {
+      return -1;
+    } else if (new_capacity >= queue_.max_size()) {
+      return -1;
+    }
+
+    max_size_ = new_capacity;
+    return 0;
+  }
+
+  // generates an instance of Codel given the constructor arguments
+  static Queue<T>* Generator(void (*drop_func)(T),
+                             size_t max_entries,
+                             uint64_t target, uint64_t window) {
+    return static_cast<Queue<T>*>(
+        new Codel(drop_func, max_entries, target, window));
+  }
+
+  // creates a generator for Codel instances that have the specified
+  // constructor arguments
+  static std::function<Queue<T>*()> Factory(
+      void (*drop_func)(T), size_t max_entries,
+      uint64_t target, uint64_t window) {
+    auto func =
+        std::bind(Generator, drop_func, max_entries, target, window);
+    return std::function<Queue<T>*()>(func);
+  }
 
  private:
   // Calls the drop_func on the object if the drop function exists

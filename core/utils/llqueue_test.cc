@@ -5,6 +5,7 @@
 namespace {
 
 using bess::utils::LockLessQueue;
+using bess::utils::Queue;
 
 // Simple test to make sure one can get back out object
 TEST(LLQueueTest, SingleInputOutput) {
@@ -53,6 +54,67 @@ TEST(LLQueueTest, MultiInputOutput) {
   }
 }
 
+// simple test to make sure that the queue is resized properly
+TEST(LLQueueTest, Resize) {
+  LockLessQueue<int*> q(8);
+
+  int n = 6;
+  int* vals1[n];
+  int* vals2[n];
+  for (int i = 0; i < n; i++) {
+    vals1[i] = new int();
+    vals2[i] = new int();
+  }
+  ASSERT_EQ(q.Push(vals1, n), n);
+  EXPECT_EQ(q.Size(), n);
+
+  ASSERT_EQ(q.Resize(16), 0);
+  ASSERT_EQ(q.Capacity(), 16);
+  ASSERT_EQ(q.Push(vals2, n), n);
+  ASSERT_EQ(q.Size(), 2 * n);
+
+  int** output = new int*[2*n]; 
+  ASSERT_EQ(q.Pop(output, 2 * n), 2*n);
+  for (int i = 0; i < n; i++) {
+    ASSERT_EQ(output[i], vals1[i]);
+    ASSERT_EQ(output[i + n], vals2[i]);
+  }
+
+  for (int i = 0; i < n; i++) {
+    delete vals1[i];
+    delete vals2[i];
+  }
+  delete[] output;
+}
+
+// Tests to make sure the factory produces fully functional LockLessQueue instance.
+TEST(LLQueueTest, Generator) {
+  std::function<Queue<int*>*()> generator =
+      LockLessQueue<int*>::Factory(8, true, true);
+  for (int i = 0; i < 2; i++) {
+    Queue<int*>* q = generator();
+    ASSERT_EQ(q->Capacity(), 8);
+
+    int* val1 = new int();
+    int* val2 = new int();
+    ASSERT_FALSE(q->Push(val1));
+    ASSERT_FALSE(q->Push(val2));
+    ASSERT_EQ(q->Size(), 2);
+
+    int* output;
+    ASSERT_FALSE(q->Pop(output));
+    ASSERT_EQ(output, val1);
+    ASSERT_FALSE(q->Pop(output));
+    ASSERT_EQ(output, val2);
+
+    ASSERT_TRUE(q->Pop(output));
+    ASSERT_TRUE(q->Empty());
+    delete val1;
+    delete val2;
+    delete q;
+  }
+}
+
 // simple test to make sure that multiple objects can be enqueued and dequeued
 // at the same time
 TEST(LLQueueTest, MultiPushPop) {
@@ -66,7 +128,7 @@ TEST(LLQueueTest, MultiPushPop) {
   EXPECT_EQ(q.Size(), n);
 
   int** output = new int*[n]; 
-  q.Pop(output, n);
+  ASSERT_EQ(q.Pop(output, n), n);
   for (int i = 0; i < n; i++) {
     ASSERT_EQ(output[i], vals[i]);
   }
